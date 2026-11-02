@@ -1,7 +1,7 @@
 import requests
 import json
 import sys
-import os  # для работы с путями
+import os
 
 
 def get_cat_image_url(text):
@@ -36,7 +36,7 @@ def upload_image_by_url(token, image_url, yandex_path):
     img_resp = requests.get(image_url, stream=True)
     img_resp.raise_for_status()
 
-    # Загрузка на Яндексовский URL
+    # Загрузка на Яндекс URL
     upload_resp = requests.put(upload_href, data=img_resp.content)
     upload_resp.raise_for_status()
 
@@ -49,6 +49,7 @@ def get_image_size(image_url):
 
 
 def main():
+
     text = input("Введите текст для картинки: ").strip()
     token = input("Введите токен Яндекс.Диска: ").strip()
 
@@ -89,10 +90,27 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     result_path = os.path.join(script_dir, "result.json")
 
-    with open(result_path, "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
+    # Читаем существующий список файлов, если result.json уже есть
+    existing_data = []
+    if os.path.exists(result_path):
+        with open(result_path, "r", encoding="utf-8") as f:
+            try:
+                existing_data = json.load(f)
+                # Если вдруг там лежит старый формат (один словарь), оборачиваем его в список
+                if isinstance(existing_data, dict):
+                    existing_data = [existing_data]
+            except json.JSONDecodeError:
+                # Если файл пустой или поврежден, начинаем с пустого списка
+                existing_data = []
 
-    print(f"Готово! Файл загружен на Яндекс.Диск, информация сохранена в {result_path}")
+    # Добавляем информацию о новой картинке
+    existing_data.append(result)
+
+    # Записываем обновленный список обратно в файл
+    with open(result_path, "w", encoding="utf-8") as f:
+        json.dump(existing_data, f, ensure_ascii=False, indent=2)
+
+    print(f"Готово! Файл загружен на Яндекс.Диск, информация добавлена в {result_path}")
 
 
 if __name__ == "__main__":
