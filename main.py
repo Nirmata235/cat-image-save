@@ -1,7 +1,7 @@
 import requests
 import json
 import sys
-import os  # Добавлено для работы с путями
+import os  # для работы с путями
 
 
 def get_cat_image_url(text):
@@ -16,14 +16,14 @@ def create_folder(token, folder_name):
     params = {"path": f"/{folder_name}"}
 
     response = requests.put(url, headers=headers, params=params)
-    # 409 означает, что папка уже существует, это нормально
+    # 409 означает, что папка уже существует
     if response.status_code not in (201, 409):
         response.raise_for_status()
 
 
 def upload_image_by_url(token, image_url, yandex_path):
     """Загрузка изображения на Яндекс.Диск по URL"""
-    # 1. Получение ссылки для загрузки
+    # 1. Ссылка для загрузки
     upload_url_api = "https://cloud-api.yandex.net/v1/disk/resources/upload"
     headers = {"Authorization": f"OAuth {token}"}
     params = {"path": yandex_path, "overwrite": "true"}
@@ -32,26 +32,23 @@ def upload_image_by_url(token, image_url, yandex_path):
     resp.raise_for_status()
     upload_href = resp.json()["href"]
 
-    # 2. Прямая загрузка содержимого изображения (без локального сохранения)
+    # 2. Загрузка содержимого изображения (без локального сохранения)
     img_resp = requests.get(image_url, stream=True)
     img_resp.raise_for_status()
 
-    # Загрузка на предоставленный Яндексом URL
+    # Загрузка на Яндексовский URL
     upload_resp = requests.put(upload_href, data=img_resp.content)
     upload_resp.raise_for_status()
 
 
 def get_image_size(image_url):
     """Получение размера изображения"""
-    # cataas не всегда корректно возвращает Content-Length в HEAD,
-    # поэтому для надежности используем GET и вычисляем длину содержимого.
     resp = requests.get(image_url)
     resp.raise_for_status()
     return len(resp.content)
 
 
 def main():
-    # Входные данные
     text = input("Введите текст для картинки: ").strip()
     token = input("Введите токен Яндекс.Диска: ").strip()
 
@@ -59,7 +56,7 @@ def main():
         print("Ошибка: текст и токен не могут быть пустыми.")
         sys.exit(1)
 
-    group_name = "PY-160"  # Название вашей группы в Нетологии
+    group_name = "PY-160"  # Название группы в Нетологии
     filename = f"{text}.jpg"
     yandex_path = f"/{group_name}/{filename}"
 
