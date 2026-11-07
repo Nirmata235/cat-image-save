@@ -21,35 +21,61 @@ def create_folder(token, folder_name):
         response.raise_for_status()
 
 
-def upload_image_by_url(token, image_url, yandex_path):
+def save_to_json(filename, size_bytes):
+    """Сохранение информации о файле в result.json (с накоплением)"""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    result_path = os.path.join(script_dir, "result.json")
+
+    existing_data = []
+    if os.path.exists(result_path):
+        with open(result_path, "r", encoding="utf-8") as f:
+            try:
+                existing_data = json.load(f)
+                if isinstance(existing_data, dict):
+                    existing_data = [existing_data]
+            except json.JSONDecodeError:
+                existing_data = []
+
+    existing_data.append({
+        "filename": filename,
+        "size_bytes": size_bytes
+    })
+
+    with open(result_path, "w", encoding="utf-8") as f:
+        json.dump(existing_data, f, ensure_ascii=False, indent=2)
+
+    return result_path
+
+
+def upload_image_by_url(token, image_url, yandex_path, filename):
     """Загрузка изображения на Яндекс.Диск по URL"""
-    # 1. Ссылка для загрузки
+    # 1. Получаем саму картинку
+    img_resp = requests.get(image_url)
+    img_resp.raise_for_status()
+    image_data = img_resp.content
+    size_bytes = len(image_data)  # Вот он, реальный размер загружаемого файла!
+
+    # 2. Загружаем на Яндекс.Диск
     upload_url_api = "https://cloud-api.yandex.net/v1/disk/resources/upload"
     headers = {"Authorization": f"OAuth {token}"}
     params = {"path": yandex_path, "overwrite": "true"}
 
+    # Cсылка для загрузки
     resp = requests.get(upload_url_api, headers=headers, params=params)
     resp.raise_for_status()
     upload_href = resp.json()["href"]
 
-    # 2. Загрузка содержимого изображения (без локального сохранения)
-    img_resp = requests.get(image_url, stream=True)
-    img_resp.raise_for_status()
-
-    # Загрузка на Яндекс URL
-    upload_resp = requests.put(upload_href, data=img_resp.content)
+    # Отправляем файл по полученной ссылке
+    upload_resp = requests.put(upload_href, data=image_data)
     upload_resp.raise_for_status()
 
-
-def get_image_size(image_url):
-    """Получение размера изображения"""
-    resp = requests.get(image_url)
-    resp.raise_for_status()
-    return len(resp.content)
+    # 3. Сохраняем результат в JSON и возвращаем путь
+    saved_path = save_to_json(filename, size_bytes)
+    return saved_path, size_bytes
 
 
 def main():
-
+    # Входные данные
     text = input("Введите текст для картинки: ").strip()
     token = input("Введите токен Яндекс.Диска: ").strip()
 
@@ -57,7 +83,7 @@ def main():
         print("Ошибка: текст и токен не могут быть пустыми.")
         sys.exit(1)
 
-    group_name = "PY-160"  # Название группы в Нетологии
+    group_name = "PY-160"  # Название вашей группы в Нетологии
     filename = f"{text}.jpg"
     yandex_path = f"/{group_name}/{filename}"
 
@@ -67,50 +93,16 @@ def main():
     print(f"[2/3] Создание папки /{group_name} и загрузка файла...")
     try:
         create_folder(token, group_name)
-        upload_image_by_url(token, image_url, yandex_path)
+        saved_path, size_bytes = upload_image_by_url(token, image_url, yandex_path, filename)
     except requests.HTTPError as e:
         print(f"Ошибка при работе с Яндекс.Диском: {e}")
         if e.response is not None:
             print(f"Детали: {e.response.text}")
         sys.exit(1)
 
-    print(f"[3/3] Получение размера и сохранение result.json...")
-    try:
-        size_bytes = get_image_size(image_url)
-    except Exception as e:
-        print(f"Не удалось получить размер изображения: {e}")
-        size_bytes = None
-
-    result = {
-        "filename": filename,
-        "size_bytes": size_bytes
-    }
-
-    # Сохраняем result.json строго рядом с файлом main.py
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    result_path = os.path.join(script_dir, "result.json")
-
-    # Читаем существующий список файлов, если result.json уже есть
-    existing_data = []
-    if os.path.exists(result_path):
-        with open(result_path, "r", encoding="utf-8") as f:
-            try:
-                existing_data = json.load(f)
-                # Если вдруг там лежит старый формат (один словарь), оборачиваем его в список
-                if isinstance(existing_data, dict):
-                    existing_data = [existing_data]
-            except json.JSONDecodeError:
-                # Если файл пустой или поврежден, начинаем с пустого списка
-                existing_data = []
-
-    # Добавляем информацию о новой картинке
-    existing_data.append(result)
-
-    # Записываем обновленный список обратно в файл
-    with open(result_path, "w", encoding="utf-8") as f:
-        json.dump(existing_data, f, ensure_ascii=False, indent=2)
-
-    print(f"Готово! Файл загружен на Яндекс.Диск, информация добавлена в {result_path}")
+    print(f"[3/3] Успешно!")
+    print(f"Готово! Файл {filename} (размер: {size_bytes} байт) загружен на Яндекс.Диск.")
+    print(f"Информация добавлена в {saved_path}")
 
 
 if __name__ == "__main__":
